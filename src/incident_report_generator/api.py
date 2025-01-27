@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import List, Optional
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException, Security, Depends
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi import FastAPI, HTTPException, Security, Depends, Query
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.security.api_key import APIKeyHeader, APIKey
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
@@ -77,6 +77,24 @@ class IncidentData(BaseModel):
                         "SLA_Status": "Within SLA"
                     }
                 ]
+            }
+        }
+
+class ReportInfo(BaseModel):
+    """Report information model."""
+    filename: str
+    created_at: datetime
+    file_size: int
+    path: str
+
+    class Config:
+        """Pydantic model configuration."""
+        json_schema_extra = {
+            "example": {
+                "filename": "incident_report_20250127_235959.pdf",
+                "created_at": "2025-01-27T23:59:59",
+                "file_size": 1024567,
+                "path": "/reports/incident_report_20250127_235959.pdf"
             }
         }
 
@@ -194,6 +212,108 @@ async def generate_report(data: IncidentData, api_key: APIKey = Depends(get_api_
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating report: {str(e)}")
 
+@app.get("/reports", tags=["Reports"])
+async def list_reports(
+    limit: int = Query(10, description="Maximum number of reports to return"),
+    skip: int = Query(0, description="Number of reports to skip"),
+    api_key: APIKey = Depends(get_api_key)
+):
+    """
+    List available incident reports.
+    
+    Returns a list of report information including filename, creation date, and file size.
+    Reports are sorted by creation date in descending order (newest first).
+    
+    Query Parameters:
+    * limit: Maximum number of reports to return (default: 10)
+    * skip: Number of reports to skip for pagination (default: 0)
+    """
+    try:
+        reports_dir = Path("reports")
+        if not reports_dir.exists():
+            return {"reports": [], "total": 0}
+        
+        # Get all PDF files in reports directory
+        pdf_files = sorted(
+            reports_dir.glob("*.pdf"),
+            key=lambda x: x.stat().st_mtime,
+            reverse=True
+        )
+        
+        # Apply pagination
+        total_reports = len(pdf_files)
+        pdf_files = pdf_files[skip:skip + limit]
+        
+        # Convert to report info
+        reports = []
+        for pdf_file in pdf_files:
+            stat = pdf_file.stat()
+            reports.append(
+                ReportInfo(
+                    filename=pdf_file.name,
+                    created_at=datetime.fromtimestamp(stat.st_mtime),
+                    file_size=stat.st_size,
+                    path=str(pdf_file)
+                ).dict()
+            )
+        
+        return {
+            "reports": reports,
+            "total": total_reports,
+            "limit": limit,
+            "skip": skip
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error listing reports: {str(e)}"
+        )
+
+@app.get("/reports/latest", tags=["Reports"])
+async def get_latest_report(api_key: APIKey = Depends(get_api_key)):
+    """
+    Get the most recently generated incident report.
+    
+    Returns the PDF file of the latest report. If no reports exist,
+    returns a 404 error.
+    """
+    try:
+        reports_dir = Path("reports")
+        if not reports_dir.exists():
+            raise HTTPException(
+                status_code=404,
+                detail="No reports directory found"
+            )
+        
+        # Get the most recent PDF file
+        pdf_files = sorted(
+            reports_dir.glob("*.pdf"),
+            key=lambda x: x.stat().st_mtime,
+            reverse=True
+        )
+        
+        if not pdf_files:
+            raise HTTPException(
+                status_code=404,
+                detail="No reports found"
+            )
+        
+        latest_report = pdf_files[0]
+        return FileResponse(
+            path=latest_report,
+            filename=latest_report.name,
+            media_type='application/pdf'
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving latest report: {str(e)}"
+        )
+
 @app.get("/", tags=["Info"])
 async def root(api_key: APIKey = Depends(get_api_key)):
     """Get API information and available endpoints."""
@@ -206,6 +326,8 @@ async def root(api_key: APIKey = Depends(get_api_key)):
             "GET /docs": "Interactive API documentation (Swagger UI)",
             "GET /redoc": "Alternative API documentation (ReDoc)",
             "GET /sample-data": "Get sample incident data",
-            "POST /generate-report": "Generate a PDF report from incident data"
+            "POST /generate-report": "Generate a PDF report from incident data",
+            "GET /reports": "List available incident reports",
+            "GET /reports/latest": "Get the most recently generated incident report"
         }
     }

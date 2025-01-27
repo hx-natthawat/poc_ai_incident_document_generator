@@ -71,5 +71,57 @@ def test_api():
         # Cleanup test data file
         Path("test_data.json").unlink(missing_ok=True)
 
+    # Test 3: List reports
+    print("\n3. Testing GET /reports")
+    try:
+        response = requests.get(
+            f"{base_url}/reports",
+            headers=headers,
+            params={"limit": 5, "skip": 0}
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            reports = data.get("reports", [])
+            total = data.get("total", 0)
+            print("✅ Successfully retrieved report list")
+            print(f"   Found {total} total reports")
+            print(f"   Showing {len(reports)} reports")
+            
+            if reports:
+                latest = reports[0]
+                print(f"   Latest report: {latest['filename']}")
+                print(f"   Created at: {latest['created_at']}")
+        else:
+            print(f"❌ Failed to list reports: {response.status_code}")
+            print(f"   Error: {response.json()}")
+    except Exception as e:
+        print(f"❌ Error listing reports: {e}")
+
+    # Test 4: Get latest report
+    print("\n4. Testing GET /reports/latest")
+    try:
+        response = requests.get(f"{base_url}/reports/latest", headers=headers)
+        
+        if response.status_code == 200:
+            # Save the PDF file
+            content_disposition = response.headers.get('content-disposition', '')
+            filename = content_disposition.split('filename=')[-1].strip('"')
+            output_file = Path(f"latest_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf")
+            
+            with open(output_file, "wb") as f:
+                f.write(response.content)
+                
+            print("✅ Successfully retrieved latest report")
+            print(f"   Original filename: {filename}")
+            print(f"   Saved to: {output_file}")
+        elif response.status_code == 404:
+            print("ℹ️ No reports found")
+        else:
+            print(f"❌ Failed to get latest report: {response.status_code}")
+            print(f"   Error: {response.json()}")
+    except Exception as e:
+        print(f"❌ Error getting latest report: {e}")
+
 if __name__ == "__main__":
     test_api()

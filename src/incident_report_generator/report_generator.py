@@ -158,6 +158,10 @@ Report generated on: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
                         title=report_title
                     )
                     logger.info(f"Successfully generated PDF report: {output_path}")
+                    
+                    # Clean up temporary markdown file
+                    markdown_path.unlink()
+                    
                     return output_path
                 except Exception as e:
                     logger.error(f"Failed to convert to PDF: {str(e)}")

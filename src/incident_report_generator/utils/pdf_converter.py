@@ -143,43 +143,30 @@ def markdown_to_pdf(
             f.write(html_document)
         
         # Convert to PDF
-        cmd = [
-            wkhtmltopdf,
+        options = [
             '--quiet',
             '--enable-local-file-access',
             '--margin-top', '20',
             '--margin-right', '20',
             '--margin-bottom', '20',
             '--margin-left', '20',
-            str(temp_html),
-            str(output_file)
         ]
         
-        result = subprocess.run(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-        
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"PDF conversion failed: {result.stderr}"
+        try:
+            subprocess.run(
+                [wkhtmltopdf] + options + [str(temp_html), str(output_file)],
+                check=True,
+                capture_output=True,
+                text=True
             )
-        
-        logger.info(f"Successfully converted {input_file} to PDF: {output_file}")
+            logger.info(f"Successfully converted {input_file} to PDF: {output_file}")
+        finally:
+            # Clean up temporary HTML file
+            temp_html.unlink()
         
     except Exception as e:
         logger.error(f"Error converting markdown to PDF: {str(e)}")
         raise
-        
-    finally:
-        # Clean up temporary HTML file
-        if 'temp_html' in locals():
-            try:
-                temp_html.unlink()
-            except Exception as e:
-                logger.warning(f"Failed to delete temporary HTML file: {str(e)}")
 
 def validate_wkhtmltopdf() -> bool:
     """Validate wkhtmltopdf installation.
