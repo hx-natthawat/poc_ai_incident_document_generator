@@ -84,7 +84,7 @@ app = FastAPI(
     
     ## Features
     * Generate PDF reports from incident data
-    * AI-powered Thai language summaries
+    * AI-powered summaries
     * SLA compliance tracking
     * Department and category analysis
     
