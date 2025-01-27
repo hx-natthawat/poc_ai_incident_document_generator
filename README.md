@@ -25,11 +25,13 @@ An AI-powered incident report generator that creates detailed PDF reports from i
 
 ## Prerequisites
 
-- Python 3.8+
-- wkhtmltopdf (for PDF generation)
+- Python 3.8+ or Docker
+- wkhtmltopdf (for PDF generation, not needed with Docker)
 - OpenAI API key
 
 ## Installation
+
+### Local Development
 
 1. Clone the repository:
 ```bash
@@ -62,14 +64,37 @@ cp .env.example .env
 # - DEBUG: Enable debug mode (default: False)
 ```
 
+### Docker Deployment
+
+1. Build and run with Docker Compose:
+```bash
+# Copy environment file
+cp .env.example .env
+# Edit .env with your configuration
+
+# Start the service
+docker compose up -d
+
+# View logs
+docker compose logs -f api
+
+# Stop the service
+docker compose down
+```
+
 ## Usage
 
-1. Start the API server:
+### Local Development
 ```bash
 python run_api.py
 ```
 
-2. Access the API documentation:
+### Docker
+```bash
+docker compose up -d
+```
+
+Access the API documentation:
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
 
@@ -96,7 +121,11 @@ All endpoints require an API key passed in the `X-API-Key` header. The API imple
 
 Run the test suite:
 ```bash
+# Local testing
 python test_api.py
+
+# Docker testing
+docker compose exec api python test_api.py
 ```
 
 ## Project Structure
@@ -116,6 +145,8 @@ incident-report-generator/
 │           └── pdf_converter.py     # PDF generation
 ├── tests/                  # Test files
 ├── .env.example           # Example environment variables
+├── docker-compose.yml     # Docker Compose configuration
+├── Dockerfile            # Docker build configuration
 ├── requirements.txt       # Python dependencies
 └── README.md             # This file
 ```

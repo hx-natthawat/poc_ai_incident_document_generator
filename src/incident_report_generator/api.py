@@ -19,6 +19,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from pydantic import BaseModel
 
 # Configure logging
 logging.basicConfig(

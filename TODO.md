@@ -14,11 +14,11 @@
    - [ ] Add support for different output formats (e.g., Excel, HTML)
    - [ ] Add progress tracking for long-running report generation
 
-3. **Data Processing**
-   - [ ] Add more advanced metrics and analytics
-   - [ ] Implement trend analysis over time
-   - [ ] Add support for custom metrics calculation
-   - [ ] Improve error handling and validation
+3. **Docker & Deployment**
+   - [ ] Add health check endpoint
+   - [ ] Implement Docker volume for persistent storage
+   - [ ] Add Docker Compose production configuration
+   - [ ] Set up container monitoring
 
 ## Medium Priority
 
@@ -80,3 +80,9 @@
    - [x] Add JWT token support
    - [x] Implement secure key validation
    - [x] Add environment variable security
+
+3. **Docker Support**
+   - [x] Create Dockerfile
+   - [x] Add Docker Compose configuration
+   - [x] Configure environment variables
+   - [x] Add Docker-specific documentation
