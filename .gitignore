@@ -41,5 +41,6 @@ reports/
 .docker/
 docker-compose.override.yml
 .env.docker
+.env.prod
 reports/
 nginx/ssl/
