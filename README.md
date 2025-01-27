@@ -1,19 +1,19 @@
 # AI-Powered Incident Report Generator
 
-An automated system for generating detailed incident reports with AI-powered summaries.
+An automated system for generating detailed incident reports with AI-powered summaries. The system provides a secure REST API with API key authentication for generating reports from incident data.
 
 ## Features
 
 - Generate incident reports from JSON data
-- AI-powered Thai language summaries
+- AI-powered summaries
 - PDF report generation with proper formatting
 - RESTful API with API key authentication
+- Interactive API documentation (Swagger UI and ReDoc)
 - Detailed metrics and breakdowns
 - Support for Thai language
 - Configurable report templates
 - SLA compliance tracking
 - Department and category analysis
-- Interactive API documentation (Swagger UI and ReDoc)
 
 ## Project Structure
 
@@ -49,6 +49,13 @@ incident_report_generator/
 ├── run_api.py               # API server script
 └── setup.py                 # Package setup file
 ```
+
+## Prerequisites
+
+- Python 3.8 or higher
+- wkhtmltopdf (for PDF generation)
+- OpenAI API key
+- Docker (optional, for containerized deployment)
 
 ## Setup
 
@@ -102,7 +109,7 @@ docker-compose logs -f
 docker-compose down
 ```
 
-## Usage
+## API Usage
 
 ### Running the API Server
 
@@ -125,6 +132,11 @@ All API endpoints require authentication using an API key. Include your API key 
 
 ```bash
 curl -H "X-API-Key: your-api-key" http://localhost:8080/sample-data
+```
+
+The API key should be set in your `.env` file:
+```bash
+API_KEY=your-secure-api-key
 ```
 
 ### API Endpoints
@@ -176,10 +188,38 @@ python test_api.py
 
 - All API endpoints are protected with API key authentication
 - API keys should be kept secure and not shared
-- Use HTTPS in production
+- Use HTTPS in production environments
 - Follow security best practices when deploying
 - Keep dependencies updated
+- Monitor API usage for suspicious activity
+- Regularly rotate API keys
 
 ## API Documentation
 
-Detailed API documentation is available in [docs/api.md](docs/api.md) and through the interactive Swagger UI and ReDoc interfaces.
+The API provides two interactive documentation interfaces:
+
+1. **Swagger UI** (http://localhost:8080/docs)
+   - Interactive API testing
+   - Request/response examples
+   - Authentication documentation
+   - Schema information
+
+2. **ReDoc** (http://localhost:8080/redoc)
+   - Clean, responsive interface
+   - Search functionality
+   - Schema documentation
+   - Security requirements
+
+Detailed API documentation is also available in [docs/api.md](docs/api.md).
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a new Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
