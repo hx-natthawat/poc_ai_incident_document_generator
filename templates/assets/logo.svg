@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+    <!-- Background Circle -->
+    <circle cx="100" cy="100" r="90" fill="#2c3e50"/>
+    
+    <!-- Incident Management Icon -->
+    <g fill="#ffffff">
+        <!-- Alert Symbol -->
+        <path d="M100 40 L160 140 L40 140 Z" fill="none" stroke="#ffffff" stroke-width="8"/>
+        <text x="95" y="120" font-family="Arial" font-size="60" font-weight="bold">!</text>
+        
+        <!-- Company Name -->
+        <text x="100" y="170" font-family="Arial" font-size="14" text-anchor="middle">INCIDENT MANAGEMENT</text>
+    </g>
+</svg>

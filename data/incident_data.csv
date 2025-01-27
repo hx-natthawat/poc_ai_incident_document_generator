@@ -1,0 +1,11 @@
+Incident_ID,Title,Priority,Department,Status,Created_On,Resolved_On,SLA_Status,Category
+1,Network Down,Critical,IT,Resolved,2025-01-01,2025-01-02,Within,Network Issues
+2,Server Issue,High,IT,Resolved,2025-01-01,2025-01-03,Breached,Hardware Failures
+3,Application Bug,Medium,Development,Unresolved,2025-01-01,,Breached,Application Bugs
+4,Email Issue,Low,IT,Resolved,2025-01-02,2025-01-03,Within,Network Issues
+5,Hardware Failure,Critical,Operations,Resolved,2025-01-03,2025-01-04,Within,Hardware Failures
+6,Database Performance,High,Development,Resolved,2025-01-02,2025-01-04,Within,Application Bugs
+7,Website Down,Critical,IT,Resolved,2025-01-03,2025-01-03,Within,Network Issues
+8,Printer Not Working,Low,Operations,Unresolved,2025-01-04,,Within,Hardware Failures
+9,Software Crash,Medium,Development,Resolved,2025-01-02,2025-01-05,Breached,Application Bugs
+10,Security Alert,High,IT,Resolved,2025-01-03,2025-01-04,Within,Network Issues
