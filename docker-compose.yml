@@ -1,12 +1,16 @@
 services:
   api:
     build: .
+    image: incident-report-generator-api
+    container_name: incident-report-api
+    restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "${API_PORT:-8000}:8000"
     volumes:
-      - ./data:/app/data
-      - ./reports:/app/reports
-      - ./templates:/app/templates
+      - reports_data:/app/reports
+      - ./data:/app/data:ro
+    env_file:
+      - .env
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - API_KEY=${API_KEY}
@@ -14,4 +18,26 @@ services:
       - API_PORT=8080
       - DEBUG=False
       - WKHTMLTOPDF_PATH=/usr/bin/wkhtmltopdf
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  reports_data:
+    name: incident-reports

@@ -1,0 +1,92 @@
+services:
+  api_1:
+    build: .
+    image: incident-report-generator-api:latest
+    restart: always
+    expose:
+      - "8081"
+    volumes:
+      - reports_data:/app/reports
+      - ./data:/app/data:ro
+    env_file:
+      - .env.prod
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+    networks:
+      - incident-report-network
+
+  api_2:
+    build: .
+    image: incident-report-generator-api:latest
+    restart: always
+    expose:
+      - "8081"
+    volumes:
+      - reports_data:/app/reports
+      - ./data:/app/data:ro
+    env_file:
+      - .env.prod
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+    networks:
+      - incident-report-network
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - api_1
+      - api_2
+    networks:
+      - incident-report-network
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+volumes:
+  reports_data:
+    name: incident-reports-prod
+
+networks:
+  incident-report-network:
+    name: incident-report-network-prod

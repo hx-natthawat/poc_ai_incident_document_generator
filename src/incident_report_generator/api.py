@@ -406,6 +406,99 @@ async def get_latest_report(
             detail=f"Error retrieving latest report: {str(e)}"
         )
 
+@app.get("/health", tags=["System"])
+@limiter.limit("60/minute")
+async def health_check(
+    request: Request,
+    response: Response,
+    api_key: APIKey = Depends(get_api_key)
+):
+    """
+    Health check endpoint for monitoring system status.
+    Returns system health information including:
+    - API status
+    - Dependencies status
+    - Storage status
+    - Memory usage
+    Rate limited to 60 requests per minute.
+    """
+    try:
+        # Check storage
+        reports_dir = Path("reports")
+        reports_dir.mkdir(exist_ok=True)
+        storage_ok = reports_dir.exists() and os.access(reports_dir, os.W_OK)
+        
+        # Check wkhtmltopdf
+        wkhtmltopdf_path = os.getenv("WKHTMLTOPDF_PATH", "wkhtmltopdf")
+        try:
+            import subprocess
+            result = subprocess.run([wkhtmltopdf_path, "--version"], 
+                                 capture_output=True, 
+                                 text=True)
+            wkhtmltopdf_ok = result.returncode == 0
+            wkhtmltopdf_version = result.stdout.strip() if wkhtmltopdf_ok else None
+        except Exception:
+            wkhtmltopdf_ok = False
+            wkhtmltopdf_version = None
+        
+        # Check OpenAI API
+        openai_key = os.getenv("OPENAI_API_KEY")
+        openai_ok = bool(openai_key and len(openai_key) > 20)
+        
+        # Get system memory info
+        import psutil
+        memory = psutil.virtual_memory()
+        memory_info = {
+            "total": memory.total,
+            "available": memory.available,
+            "percent": memory.percent,
+            "used": memory.used
+        }
+        
+        # Check disk space
+        disk = psutil.disk_usage(".")
+        disk_info = {
+            "total": disk.total,
+            "used": disk.used,
+            "free": disk.free,
+            "percent": disk.percent
+        }
+        
+        status = {
+            "status": "healthy" if all([storage_ok, wkhtmltopdf_ok, openai_ok]) else "degraded",
+            "timestamp": datetime.utcnow().isoformat(),
+            "version": "1.0.0",
+            "dependencies": {
+                "storage": {
+                    "status": "ok" if storage_ok else "error",
+                    "reports_dir": str(reports_dir.absolute())
+                },
+                "wkhtmltopdf": {
+                    "status": "ok" if wkhtmltopdf_ok else "error",
+                    "version": wkhtmltopdf_version
+                },
+                "openai": {
+                    "status": "ok" if openai_ok else "error"
+                }
+            },
+            "system": {
+                "memory": memory_info,
+                "disk": disk_info
+            }
+        }
+        
+        response_code = 200 if status["status"] == "healthy" else 503
+        response.status_code = response_code
+        
+        return status
+        
+    except Exception as e:
+        logger.error(f"Health check failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Health check failed: {str(e)}"
+        )
+
 @app.get("/", tags=["Info"])
 async def root(api_key: APIKey = Depends(get_api_key)):
     """Get API information and available endpoints."""
@@ -420,6 +513,7 @@ async def root(api_key: APIKey = Depends(get_api_key)):
             "GET /sample-data": "Get sample incident data",
             "POST /generate-report": "Generate a PDF report from incident data",
             "GET /reports": "List available incident reports",
-            "GET /reports/latest": "Get the most recently generated incident report"
+            "GET /reports/latest": "Get the most recently generated incident report",
+            "GET /health": "Health check endpoint for monitoring system status"
         }
     }

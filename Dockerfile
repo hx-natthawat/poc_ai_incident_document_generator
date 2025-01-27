@@ -1,9 +1,11 @@
 # Use Python 3.12 slim image
 FROM python:3.12-slim
 
-# Install system dependencies including wkhtmltopdf
+# Install system dependencies including wkhtmltopdf and build dependencies for psutil
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+    gcc \
+    python3-dev \
     wkhtmltopdf \
     && rm -rf /var/lib/apt/lists/*
 
@@ -26,11 +28,12 @@ RUN pip install -e .
 RUN mkdir -p data reports
 
 # Set environment variables
+ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 ENV WKHTMLTOPDF_PATH=/usr/bin/wkhtmltopdf
 
 # Expose the API port
-EXPOSE 8080
+EXPOSE 8081
 
 # Run the API server
 CMD ["python", "run_api.py"]

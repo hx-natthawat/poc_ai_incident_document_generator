@@ -4,16 +4,22 @@ import json
 from typing import Dict, List, Optional
 import logging
 from openai import OpenAI, OpenAIError, APIError, APITimeoutError, AuthenticationError
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# Configure OpenAI
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# Get OpenAI API key from environment
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY environment variable is not set")
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+def get_openai_client():
+    """Get OpenAI client instance."""
+    return OpenAI(api_key=OPENAI_API_KEY)
 
 def generate_summary(incidents: List[Dict]) -> str:
     """Generate a summary of incident data using OpenAI.
@@ -22,11 +28,7 @@ def generate_summary(incidents: List[Dict]) -> str:
         incidents: List of incident dictionaries
         
     Returns:
-        Generated summary text
-        
-    Raises:
-        ValueError: If incidents list is empty
-        RuntimeError: If OpenAI API call fails
+        str: Generated summary
     """
     try:
         if not incidents:
@@ -96,6 +98,9 @@ Please provide:
 
 Format the response in clear paragraphs with proper line breaks."""
 
+        # Initialize OpenAI client
+        client = get_openai_client()
+        
         # Call OpenAI API with retry logic
         for attempt in range(3):  # Retry up to 3 times
             try:
@@ -139,15 +144,14 @@ def validate_openai_key() -> bool:
     """Validate the OpenAI API key.
     
     Returns:
-        True if the API key is valid, False otherwise
+        bool: True if key is valid, False otherwise
     """
     try:
+        # Initialize OpenAI client
+        client = get_openai_client()
+        
         # Make a minimal API call to test the key
-        client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": "test"}],
-            max_tokens=5
-        )
+        client.models.list()
         return True
         
     except AuthenticationError:
