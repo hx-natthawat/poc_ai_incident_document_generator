@@ -27,28 +27,30 @@ async def get_api_key(api_key_header: str = Security(api_key_header)):
 
 class Incident(BaseModel):
     """Incident data model."""
-    Incident_ID: str
+    ID: str
     Title: str
+    Description: str
+    Status: str
     Priority: str
     Department: str
     Category: str
-    Status: str
-    Created_On: datetime
-    Resolved_On: Optional[datetime] = None
+    Created_Date: datetime
+    Resolution_Date: Optional[datetime] = None
     SLA_Status: str
 
     class Config:
         """Pydantic model configuration."""
         json_schema_extra = {
             "example": {
-                "Incident_ID": "INC001",
+                "ID": "INC001",
                 "Title": "System Outage",
+                "Description": "Complete system outage affecting all users",
+                "Status": "Resolved",
                 "Priority": "High",
                 "Department": "IT",
                 "Category": "Infrastructure",
-                "Status": "Resolved",
-                "Created_On": "2025-01-27T10:00:00",
-                "Resolved_On": "2025-01-27T12:00:00",
+                "Created_Date": "2025-01-27T10:00:00",
+                "Resolution_Date": "2025-01-27T12:00:00",
                 "SLA_Status": "Within SLA"
             }
         }
@@ -63,14 +65,15 @@ class IncidentData(BaseModel):
             "example": {
                 "incidents": [
                     {
-                        "Incident_ID": "INC001",
+                        "ID": "INC001",
                         "Title": "System Outage",
+                        "Description": "Complete system outage affecting all users",
+                        "Status": "Resolved",
                         "Priority": "High",
                         "Department": "IT",
                         "Category": "Infrastructure",
-                        "Status": "Resolved",
-                        "Created_On": "2025-01-27T10:00:00",
-                        "Resolved_On": "2025-01-27T12:00:00",
+                        "Created_Date": "2025-01-27T10:00:00",
+                        "Resolution_Date": "2025-01-27T12:00:00",
                         "SLA_Status": "Within SLA"
                     }
                 ]
@@ -82,21 +85,19 @@ app = FastAPI(
     description="""
     Generate detailed incident reports with AI-powered summaries.
     
-    ## Features
+    Features:
     * Generate PDF reports from incident data
-    * AI-powered summaries
+    * AI-powered incident analysis
+    * Department and category breakdowns
     * SLA compliance tracking
-    * Department and category analysis
+    * Priority-based metrics
     
-    ## Authentication
-    This API uses API Key authentication. Include your API key in the `X-API-Key` header.
-    
-    ## Rate Limiting
-    Please be mindful of rate limits and API usage guidelines.
+    All endpoints require API key authentication via the X-API-Key header.
     """,
     version="1.0.0",
     docs_url=None,
-    redoc_url=None
+    redoc_url=None,
+    openapi_url=None
 )
 
 @app.get("/docs", include_in_schema=False)
@@ -104,8 +105,7 @@ async def custom_swagger_ui_html():
     """Custom Swagger UI with security information."""
     return get_swagger_ui_html(
         openapi_url="/openapi.json",
-        title=app.title + " - Swagger UI",
-        oauth2_redirect_url=None,
+        title="Incident Report Generator API - Documentation",
         swagger_js_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js",
         swagger_css_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css",
     )
@@ -113,27 +113,24 @@ async def custom_swagger_ui_html():
 @app.get("/redoc", include_in_schema=False)
 async def redoc_html():
     """ReDoc API documentation."""
-    return HTMLResponse("""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Incident Report Generator API - ReDoc</title>
-        <meta charset="utf-8"/>
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <link href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700" rel="stylesheet">
-        <style>
-            body {
-                margin: 0;
-                padding: 0;
-            }
-        </style>
-    </head>
-    <body>
-        <redoc spec-url="/openapi.json"></redoc>
-        <script src="https://cdn.jsdelivr.net/npm/redoc@next/bundles/redoc.standalone.js"></script>
-    </body>
-    </html>
-    """)
+    return HTMLResponse(
+        """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Incident Report Generator API - ReDoc</title>
+            <meta charset="utf-8"/>
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <link href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700" rel="stylesheet">
+            <style>body { margin: 0; padding: 0; }</style>
+        </head>
+        <body>
+            <redoc spec-url="/openapi.json"></redoc>
+            <script src="https://cdn.jsdelivr.net/npm/redoc@next/bundles/redoc.standalone.js"></script>
+        </body>
+        </html>
+        """
+    )
 
 @app.get("/openapi.json", include_in_schema=False)
 async def get_openapi_endpoint():
@@ -170,7 +167,7 @@ async def generate_report(data: IncidentData, api_key: APIKey = Depends(get_api_
     * Priority-based analysis
     * Department breakdown
     * Category analysis
-    * Thai language summary
+    * AI-powered summary
     * Detailed incident list
     
     Returns the generated PDF file.
@@ -181,22 +178,17 @@ async def generate_report(data: IncidentData, api_key: APIKey = Depends(get_api_
         # Initialize report generator
         generator = IncidentReportGenerator()
         
-        # Convert input data to DataFrame
-        df = generator.json_to_dataframe(data.dict())
-        
-        # Set data file for report generation
-        generator.data = df
+        # Convert pydantic model to dict and extract incidents list
+        incidents = [incident.dict() for incident in data.incidents]
         
         # Generate report
-        report, md_file, pdf_file = generator.generate_report()
+        report_path = generator.generate_report(incidents)
         
         # Return the PDF file
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"incident_report_{timestamp}.pdf"
         return FileResponse(
-            pdf_file,
-            media_type="application/pdf",
-            filename=filename
+            path=report_path,
+            filename=report_path.name,
+            media_type='application/pdf'
         )
         
     except Exception as e:
@@ -208,11 +200,12 @@ async def root(api_key: APIKey = Depends(get_api_key)):
     return {
         "name": "Incident Report Generator API",
         "version": "1.0.0",
-        "endpoints": [
-            {"path": "/", "method": "GET", "description": "This information"},
-            {"path": "/sample-data", "method": "GET", "description": "Get sample incident data"},
-            {"path": "/generate-report", "method": "POST", "description": "Generate PDF report from incident data"},
-            {"path": "/docs", "method": "GET", "description": "API documentation (Swagger UI)"},
-            {"path": "/redoc", "method": "GET", "description": "API documentation (ReDoc)"}
-        ]
+        "description": "Generate detailed incident reports with AI-powered summaries",
+        "endpoints": {
+            "GET /": "This information",
+            "GET /docs": "Interactive API documentation (Swagger UI)",
+            "GET /redoc": "Alternative API documentation (ReDoc)",
+            "GET /sample-data": "Get sample incident data",
+            "POST /generate-report": "Generate a PDF report from incident data"
+        }
     }

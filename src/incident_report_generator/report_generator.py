@@ -1,228 +1,171 @@
-"""Main report generation module."""
-import pandas as pd
+"""Incident report generator module."""
+import os
+import json
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+import pandas as pd
+import logging
+from typing import Dict, List, Optional, Union
 
-from .utils.data_processing import (
-    load_incident_data,
-    calculate_sla_compliance,
-    get_priority_breakdown,
-    get_department_breakdown,
-    get_category_breakdown
-)
-from .utils.ai_integration import AISummarizer
+from .utils.data_processing import calculate_metrics, analyze_departments, analyze_categories
+from .utils.ai_integration import generate_summary
 from .utils.pdf_converter import markdown_to_pdf
 
+# Configure logging
+logger = logging.getLogger(__name__)
+
 class IncidentReportGenerator:
-    def __init__(self, data: Optional[pd.DataFrame] = None, data_file: Optional[Path] = None, template_file: Optional[Path] = None):
-        self.base_dir = Path(__file__).parent.parent.parent
-        self.data_file = data_file or (self.base_dir / "data" / "incident_data.csv")
-        self.template_file = template_file or (self.base_dir / "templates" / "report_template.md")
-        self.reports_dir = self.base_dir / "reports"
-        self.reports_dir.mkdir(exist_ok=True)
-        self.ai_summarizer = AISummarizer()
-        self.data = data
+    """Class for generating incident reports."""
+    
+    def __init__(self, output_dir: Union[str, Path] = "reports"):
+        """Initialize the report generator.
         
-    def generate_report(self) -> Tuple[str, Path, Path]:
-        """Generate the complete incident report in both Markdown and PDF formats.
-        
-        Returns:
-            Tuple containing:
-            - Report content as string
-            - Path to generated markdown file
-            - Path to generated PDF file
+        Args:
+            output_dir: Directory to save generated reports
         """
-        # Load and process data
-        if self.data is None:
-            self.data = load_incident_data(self.data_file)
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Calculate metrics
-        metrics = self._calculate_metrics(self.data)
+    def json_to_dataframe(self, json_data: List[Dict]) -> pd.DataFrame:
+        """Convert JSON data to pandas DataFrame.
         
-        # Generate Thai summary
-        thai_summary = self.ai_summarizer.generate_thai_summary(metrics)
-        
-        # Render report
-        report = self._render_report(metrics, thai_summary)
-        
-        # Save reports
-        md_file, pdf_file = self._save_report(report)
-        
-        return report, md_file, pdf_file
-    
-    def json_to_dataframe(self, data: dict) -> pd.DataFrame:
-        """Convert JSON data to pandas DataFrame."""
-        df = pd.DataFrame(data["incidents"])
-        # Convert datetime strings to pandas datetime
-        df["Created_On"] = pd.to_datetime(df["Created_On"])
-        df["Resolved_On"] = pd.to_datetime(df["Resolved_On"])
-        return df
-    
-    def _calculate_metrics(self, df: pd.DataFrame) -> Dict:
-        """Calculate all metrics for the report."""
-        total, within_sla, breached_sla, compliance_rate = calculate_sla_compliance(df)
-        resolved = len(df[df['Status'] == 'Resolved'])
-        
-        # Calculate resolution time for resolved incidents
-        resolved_df = df[df["Status"] == "Resolved"].copy()
-        resolved_df["resolution_time"] = (resolved_df["Resolved_On"] - resolved_df["Created_On"]).dt.total_seconds() / 3600
-        avg_resolution_time = resolved_df["resolution_time"].mean() if not resolved_df.empty else 0
-        
-        # Priority breakdown
-        priority_df = df.groupby("Priority").agg({
-            "Incident_ID": "count",
-            "Status": lambda x: sum(x == "Resolved"),
-            "SLA_Status": lambda x: sum(x == "Within SLA")
-        }).reset_index()
-        
-        priority_rows = []
-        for _, row in priority_df.iterrows():
-            total = row["Incident_ID"]
-            resolved = row["Status"]
-            unresolved = total - resolved
-            sla_breaches = total - row["SLA_Status"]
-            compliance_rate = (row["SLA_Status"] / total) * 100
+        Args:
+            json_data: List of incident dictionaries
             
-            # Calculate average resolution time for this priority
-            priority_resolved = resolved_df[resolved_df["Priority"] == row["Priority"]]
-            avg_time = priority_resolved["resolution_time"].mean() if not priority_resolved.empty else 0
-            
-            priority_rows.append(
-                f"{row['Priority']} | {total} | {resolved} | {unresolved} | "
-                f"{sla_breaches} | {compliance_rate:.1f}% | {avg_time:.1f}"
-            )
-        
-        # Department breakdown
-        dept_df = df.groupby("Department").agg({
-            "Incident_ID": "count",
-            "Status": lambda x: sum(x == "Resolved"),
-            "SLA_Status": lambda x: sum(x == "Within SLA")
-        }).reset_index()
-        
-        dept_rows = []
-        for _, row in dept_df.iterrows():
-            total = row["Incident_ID"]
-            resolved = row["Status"]
-            unresolved = total - resolved
-            sla_breaches = total - row["SLA_Status"]
-            compliance_rate = (row["SLA_Status"] / total) * 100
-            
-            dept_rows.append(
-                f"{row['Department']} | {total} | {resolved} | {unresolved} | "
-                f"{sla_breaches} | {compliance_rate:.1f}%"
-            )
-        
-        # Category breakdown
-        cat_df = df.groupby("Category").agg({
-            "Incident_ID": "count",
-            "Status": lambda x: sum(x == "Resolved"),
-            "SLA_Status": lambda x: sum(x == "Within SLA")
-        }).reset_index()
-        
-        cat_rows = []
-        for _, row in cat_df.iterrows():
-            total = row["Incident_ID"]
-            resolved = row["Status"]
-            unresolved = total - resolved
-            sla_breaches = total - row["SLA_Status"]
-            compliance_rate = (row["SLA_Status"] / total) * 100
-            
-            cat_rows.append(
-                f"{row['Category']} | {total} | {resolved} | {unresolved} | "
-                f"{sla_breaches} | {compliance_rate:.1f}%"
-            )
-        
-        # SLA summary
-        sla_df = df.groupby("Priority").agg({
-            "Incident_ID": "count",
-            "SLA_Status": lambda x: sum(x == "Within SLA")
-        }).reset_index()
-        
-        sla_rows = []
-        for _, row in sla_df.iterrows():
-            total = row["Incident_ID"]
-            within_sla = row["SLA_Status"]
-            breached = total - within_sla
-            compliance_rate = (within_sla / total) * 100
-            
-            sla_rows.append(
-                f"{row['Priority']} | {total} | {within_sla} | {breached} | "
-                f"{compliance_rate:.1f}%"
-            )
-        
-        # Incident list
-        incident_rows = []
-        for _, row in df.iterrows():
-            resolved_on = row["Resolved_On"].strftime("%Y-%m-%d %H:%M") if pd.notna(row["Resolved_On"]) else "N/A"
-            created_on = row["Created_On"].strftime("%Y-%m-%d %H:%M")
-            
-            incident_rows.append(
-                f"{row['Incident_ID']} | {row['Title']} | {row['Priority']} | "
-                f"{row['Department']} | {row['Status']} | {created_on} | "
-                f"{resolved_on} | {row['SLA_Status']}"
-            )
-        
-        return {
-            'total_incidents': total,
-            'resolved': resolved,
-            'unresolved': total - resolved,
-            'avg_resolution_time': f"{avg_resolution_time:.1f}",
-            'sla_compliance_rate': f"{compliance_rate:.1f}",
-            'priority_breakdown': "\n".join(priority_rows),
-            'department_breakdown': "\n".join(dept_rows),
-            'category_breakdown': "\n".join(cat_rows),
-            'sla_summary': "\n".join(sla_rows),
-            'incident_list': "\n".join(incident_rows),
-            'report_period': {
-                'start': df['Created_On'].min().strftime('%Y-%m-%d'),
-                'end': df['Created_On'].max().strftime('%Y-%m-%d')
-            }
-        }
-    
-    def _render_report(self, metrics: Dict, thai_summary: str) -> str:
-        """Render the report using the template."""
-        with open(self.template_file, 'r') as f:
-            template = f.read()
-        
-        report = template.format(
-            start_date=metrics['report_period']['start'],
-            end_date=metrics['report_period']['end'],
-            generation_date=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            total_incidents=metrics['total_incidents'],
-            resolved_incidents=metrics['resolved'],
-            unresolved_incidents=metrics['unresolved'],
-            avg_resolution_time=metrics['avg_resolution_time'],
-            sla_compliance_rate=metrics['sla_compliance_rate'],
-            thai_summary=thai_summary,
-            priority_breakdown=metrics['priority_breakdown'],
-            department_breakdown=metrics['department_breakdown'],
-            category_breakdown=metrics['category_breakdown'],
-            sla_summary=metrics['sla_summary'],
-            incident_list=metrics['incident_list']
-        )
-        
-        return report
-    
-    def _save_report(self, report: str) -> Tuple[Path, Path]:
-        """Save the generated report in both Markdown and PDF formats.
-        
         Returns:
-            Tuple containing paths to the markdown and PDF files.
+            DataFrame containing incident data
+            
+        Raises:
+            ValueError: If json_data is empty or invalid
         """
-        # Create reports directory if it doesn't exist
-        self.reports_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            if not json_data:
+                raise ValueError("Empty JSON data provided")
+                
+            df = pd.DataFrame(json_data)
+            
+            # Validate required columns
+            required_columns = [
+                'ID', 'Title', 'Description', 'Status', 'Priority',
+                'Department', 'Category', 'Created_Date', 'Resolution_Date',
+                'SLA_Status'
+            ]
+            
+            missing_columns = [col for col in required_columns if col not in df.columns]
+            if missing_columns:
+                raise ValueError(f"Missing required columns: {', '.join(missing_columns)}")
+            
+            # Convert date columns to datetime
+            date_columns = ['Created_Date', 'Resolution_Date']
+            for col in date_columns:
+                df[col] = pd.to_datetime(df[col], errors='coerce')
+            
+            return df
+            
+        except Exception as e:
+            logger.error(f"Error converting JSON to DataFrame: {str(e)}")
+            raise
+    
+    def generate_report(
+        self,
+        incidents: List[Dict],
+        output_format: str = "pdf",
+        title: Optional[str] = None,
+        css_file: Optional[Path] = None
+    ) -> Path:
+        """Generate an incident report.
         
-        # Generate filenames with timestamp
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        md_file = self.reports_dir / f"incident_report_{timestamp}.md"
-        pdf_file = self.reports_dir / f"incident_report_{timestamp}.pdf"
-        
-        # Save markdown
-        with open(md_file, 'w') as f:
-            f.write(report)
-        
-        # Convert to PDF
-        markdown_to_pdf(md_file, pdf_file)
-        
-        return md_file, pdf_file
+        Args:
+            incidents: List of incident dictionaries
+            output_format: Output format (pdf or markdown)
+            title: Optional report title
+            css_file: Optional CSS file for styling
+            
+        Returns:
+            Path to the generated report
+            
+        Raises:
+            ValueError: If incidents list is empty or invalid
+            RuntimeError: If report generation fails
+        """
+        try:
+            # Convert to DataFrame
+            df = self.json_to_dataframe(incidents)
+            
+            # Generate report title and filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            report_title = title or f"Incident Report - {timestamp}"
+            filename = f"incident_report_{timestamp}"
+            
+            # Calculate metrics
+            metrics = calculate_metrics(df)
+            dept_analysis = analyze_departments(df)
+            cat_analysis = analyze_categories(df)
+            
+            # Generate AI summary
+            try:
+                ai_summary = generate_summary(incidents)
+                logger.info("Successfully generated AI summary")
+            except Exception as e:
+                logger.error(f"Failed to generate AI summary: {str(e)}")
+                ai_summary = "AI summary generation failed. Please check the logs for details."
+            
+            # Create markdown content
+            markdown_content = f"""# {report_title}
+
+## Executive Summary
+{ai_summary}
+
+## Metrics Overview
+- Total Incidents: {metrics['total_incidents']}
+- Resolved Incidents: {metrics['resolved_incidents']}
+- Resolution Rate: {metrics['resolution_rate']:.1f}%
+- Average Resolution Time: {metrics['avg_resolution_time']:.1f} hours
+- SLA Compliance Rate: {metrics['sla_compliance_rate']:.1f}%
+
+## Department Analysis
+{dept_analysis}
+
+## Category Analysis
+{cat_analysis}
+
+## Priority Distribution
+{df['Priority'].value_counts().to_markdown()}
+
+## Status Distribution
+{df['Status'].value_counts().to_markdown()}
+
+## Recent Incidents
+{df.sort_values('Created_Date', ascending=False).head().to_markdown()}
+
+---
+Report generated on: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+"""
+            
+            # Save markdown file
+            markdown_path = self.output_dir / f"{filename}.md"
+            with open(markdown_path, 'w', encoding='utf-8') as f:
+                f.write(markdown_content)
+            
+            # Convert to PDF if requested
+            if output_format.lower() == 'pdf':
+                output_path = self.output_dir / f"{filename}.pdf"
+                try:
+                    markdown_to_pdf(
+                        input_file=markdown_path,
+                        output_file=output_path,
+                        css_file=css_file,
+                        title=report_title
+                    )
+                    logger.info(f"Successfully generated PDF report: {output_path}")
+                    return output_path
+                except Exception as e:
+                    logger.error(f"Failed to convert to PDF: {str(e)}")
+                    logger.info("Falling back to markdown format")
+                    return markdown_path
+            
+            return markdown_path
+            
+        except Exception as e:
+            logger.error(f"Error generating report: {str(e)}")
+            raise RuntimeError(f"Failed to generate report: {str(e)}")

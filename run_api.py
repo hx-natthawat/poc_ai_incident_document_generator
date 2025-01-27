@@ -1,21 +1,21 @@
-"""Run the FastAPI server."""
+"""Run the FastAPI application."""
 import os
 import uvicorn
-from dotenv import load_dotenv
+from src.incident_report_generator.api import app
 
 if __name__ == "__main__":
-    # Load environment variables
-    load_dotenv()
-    
-    # Get configuration from environment
     host = os.getenv("API_HOST", "0.0.0.0")
-    port = int(os.getenv("API_PORT", "8080"))
-    debug = os.getenv("DEBUG", "False").lower() == "true"
+    port = int(os.getenv("API_PORT", "8000"))  # Changed from 8080 to 8000
+    debug = os.getenv("DEBUG", "false").lower() == "true"
     
-    # Run server
+    # Configure logging
+    log_config = uvicorn.config.LOGGING_CONFIG
+    log_config["formatters"]["access"]["fmt"] = "%(asctime)s - %(levelname)s - %(message)s"
+    
     uvicorn.run(
-        "incident_report_generator.api:app",
+        app=app,
         host=host,
         port=port,
-        reload=debug
+        reload=debug,
+        log_config=log_config
     )

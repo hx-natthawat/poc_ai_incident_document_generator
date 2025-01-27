@@ -1,95 +1,122 @@
 """Data processing utilities for incident reports."""
+import json
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional
+import logging
 import pandas as pd
 
-def load_incident_data(file_path: Path) -> pd.DataFrame:
-    """Load and preprocess incident data from CSV or JSON."""
-    if file_path.suffix.lower() == '.csv':
-        df = pd.read_csv(file_path)
-    else:  # JSON
-        df = pd.read_json(file_path)
-        if 'incidents' in df.columns:
-            df = pd.json_normalize(df['incidents'])
-    
-    # Convert datetime columns
-    for col in ['Created_On', 'Resolved_On']:
-        if col in df.columns:
-            df[col] = pd.to_datetime(df[col])
-    
-    return df
+# Configure logging
+logger = logging.getLogger(__name__)
 
-def calculate_sla_compliance(df: pd.DataFrame) -> Tuple[int, int, int, float]:
-    """Calculate SLA compliance metrics.
+def calculate_metrics(df: pd.DataFrame) -> Dict:
+    """Calculate key metrics from incident data.
     
+    Args:
+        df: DataFrame containing incident data
+        
     Returns:
-        Tuple containing:
-        - Total incidents
-        - Number within SLA
-        - Number breaching SLA
-        - Compliance rate as percentage
+        Dictionary containing calculated metrics
     """
-    total = len(df)
-    within_sla = len(df[df['SLA_Status'] == 'Within SLA'])
-    breached_sla = total - within_sla
-    compliance_rate = (within_sla / total * 100) if total > 0 else 0
-    
-    return total, within_sla, breached_sla, compliance_rate
-
-def get_priority_breakdown(df: pd.DataFrame) -> Dict:
-    """Calculate incident breakdown by priority level."""
-    breakdown = {}
-    for priority in df['Priority'].unique():
-        priority_df = df[df['Priority'] == priority]
-        total = len(priority_df)
-        resolved = len(priority_df[priority_df['Status'] == 'Resolved'])
-        sla_breached = len(priority_df[priority_df['SLA_Status'] == 'SLA Breached'])
+    try:
+        total_incidents = len(df)
+        resolved = len(df[df['Status'] == 'Resolved'])
+        resolution_rate = (resolved / total_incidents * 100) if total_incidents > 0 else 0
         
-        # Calculate average resolution time
-        resolved_df = priority_df[priority_df['Status'] == 'Resolved'].copy()
-        if not resolved_df.empty:
-            resolved_df['resolution_time'] = (
-                resolved_df['Resolved_On'] - resolved_df['Created_On']
+        # Calculate average resolution time for resolved incidents
+        resolved_df = df[df['Status'] == 'Resolved'].copy()
+        if len(resolved_df) > 0:
+            resolved_df['Resolution_Time'] = (
+                resolved_df['Resolution_Date'] - resolved_df['Created_Date']
             ).dt.total_seconds() / 3600  # Convert to hours
-            avg_time = resolved_df['resolution_time'].mean()
+            avg_resolution_time = resolved_df['Resolution_Time'].mean()
         else:
-            avg_time = 0
+            avg_resolution_time = 0
         
-        breakdown[priority] = {
-            'total': total,
-            'resolved': resolved,
-            'unresolved': total - resolved,
-            'sla_breached': sla_breached,
-            'compliance_rate': ((total - sla_breached) / total * 100) if total > 0 else 0,
-            'avg_resolution_time': avg_time
+        # Calculate SLA compliance
+        sla_compliant = len(df[df['SLA_Status'] == 'Within SLA'])
+        sla_compliance_rate = (sla_compliant / total_incidents * 100) if total_incidents > 0 else 0
+        
+        metrics = {
+            'total_incidents': total_incidents,
+            'resolved_incidents': resolved,
+            'resolution_rate': resolution_rate,
+            'avg_resolution_time': avg_resolution_time,
+            'sla_compliance_rate': sla_compliance_rate
         }
-    
-    return breakdown
-
-def get_department_breakdown(df: pd.DataFrame) -> Dict:
-    """Calculate incident breakdown by department."""
-    breakdown = {}
-    for dept in df['Department'].unique():
-        dept_df = df[df['Department'] == dept]
-        total = len(dept_df)
-        within_sla = len(dept_df[dept_df['SLA_Status'] == 'Within SLA'])
-        breached = total - within_sla
-        compliance_rate = (within_sla / total * 100) if total > 0 else 0
         
-        breakdown[dept] = (total, within_sla, breached, compliance_rate)
-    
-    return breakdown
-
-def get_category_breakdown(df: pd.DataFrame) -> Dict:
-    """Calculate incident breakdown by category."""
-    breakdown = {}
-    for cat in df['Category'].unique():
-        cat_df = df[df['Category'] == cat]
-        total = len(cat_df)
-        within_sla = len(cat_df[cat_df['SLA_Status'] == 'Within SLA'])
-        breached = total - within_sla
-        compliance_rate = (within_sla / total * 100) if total > 0 else 0
+        logger.info("Successfully calculated incident metrics")
+        return metrics
         
-        breakdown[cat] = (total, within_sla, breached, compliance_rate)
+    except Exception as e:
+        logger.error(f"Error calculating metrics: {str(e)}")
+        raise RuntimeError(f"Failed to calculate metrics: {str(e)}")
+
+def analyze_departments(df: pd.DataFrame) -> str:
+    """Analyze incident distribution across departments.
     
-    return breakdown
+    Args:
+        df: DataFrame containing incident data
+        
+    Returns:
+        Markdown formatted department analysis
+    """
+    try:
+        dept_counts = df['Department'].value_counts()
+        dept_resolved = df[df['Status'] == 'Resolved'].groupby('Department').size()
+        
+        analysis = []
+        for dept in dept_counts.index:
+            total = dept_counts[dept]
+            resolved = dept_resolved.get(dept, 0)
+            resolution_rate = (resolved / total * 100) if total > 0 else 0
+            
+            analysis.append(
+                f"### {dept}\n"
+                f"- Total Incidents: {total}\n"
+                f"- Resolved: {resolved}\n"
+                f"- Resolution Rate: {resolution_rate:.1f}%\n"
+            )
+        
+        return "\n".join(analysis)
+        
+    except Exception as e:
+        logger.error(f"Error analyzing departments: {str(e)}")
+        raise RuntimeError(f"Failed to analyze departments: {str(e)}")
+
+def analyze_categories(df: pd.DataFrame) -> str:
+    """Analyze incident distribution across categories.
+    
+    Args:
+        df: DataFrame containing incident data
+        
+    Returns:
+        Markdown formatted category analysis
+    """
+    try:
+        cat_counts = df['Category'].value_counts()
+        cat_priority = df.groupby(['Category', 'Priority']).size().unstack(fill_value=0)
+        cat_sla = df.groupby(['Category', 'SLA_Status']).size().unstack(fill_value=0)
+        
+        analysis = []
+        for cat in cat_counts.index:
+            total = cat_counts[cat]
+            priorities = cat_priority.loc[cat].to_dict()
+            sla_status = cat_sla.loc[cat].to_dict()
+            
+            analysis.append(
+                f"### {cat}\n"
+                f"- Total Incidents: {total}\n"
+                f"- Priority Distribution:\n"
+                f"  - High: {priorities.get('High', 0)}\n"
+                f"  - Medium: {priorities.get('Medium', 0)}\n"
+                f"  - Low: {priorities.get('Low', 0)}\n"
+                f"- SLA Status:\n"
+                f"  - Within SLA: {sla_status.get('Within SLA', 0)}\n"
+                f"  - Breached: {sla_status.get('Breached', 0)}\n"
+            )
+        
+        return "\n".join(analysis)
+        
+    except Exception as e:
+        logger.error(f"Error analyzing categories: {str(e)}")
+        raise RuntimeError(f"Failed to analyze categories: {str(e)}")
