@@ -1,29 +1,94 @@
 """FastAPI service for incident report generation."""
-import json
 import os
+import json
 from pathlib import Path
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
+import logging
+import secrets
+import time
 
-from fastapi import FastAPI, HTTPException, Security, Depends, Query
+from fastapi import FastAPI, HTTPException, Security, Depends, Query, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.security.api_key import APIKeyHeader, APIKey
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
-from starlette.status import HTTP_403_FORBIDDEN
-from pydantic import BaseModel
+from starlette.status import HTTP_403_FORBIDDEN, HTTP_429_TOO_MANY_REQUESTS
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 
-# API Key setup
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('api.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# Rate limiting setup
+limiter = Limiter(key_func=get_remote_address)
+
+# Security setup
+SECRET_KEY = os.getenv("SECRET_KEY", secrets.token_urlsafe(32))
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# API Key setup with enhanced security
 API_KEY_NAME = "X-API-Key"
 API_KEY = os.getenv("API_KEY", "your-api-key-here")
+if API_KEY == "your-api-key-here":
+    logger.warning("Using default API key! Please set a secure API key in environment variables.")
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
-async def get_api_key(api_key_header: str = Security(api_key_header)):
-    if not api_key_header or api_key_header != API_KEY:
+def log_request(request: Request):
+    """Log request details."""
+    logger.info(
+        f"Request: {request.method} {request.url.path} "
+        f"Client: {request.client.host} "
+        f"User-Agent: {request.headers.get('user-agent')}"
+    )
+
+def verify_api_key(key: str) -> bool:
+    """Verify API key using constant-time comparison."""
+    return secrets.compare_digest(key, API_KEY)
+
+async def get_api_key(
+    request: Request,
+    response: Response,
+    api_key_header: str = Security(api_key_header)
+):
+    """Validate API key with rate limiting and logging."""
+    log_request(request)
+    
+    if not api_key_header or not verify_api_key(api_key_header):
+        logger.warning(f"Invalid API key attempt from {request.client.host}")
         raise HTTPException(
-            status_code=HTTP_403_FORBIDDEN, detail="Invalid API Key"
+            status_code=HTTP_403_FORBIDDEN,
+            detail="Invalid API Key"
         )
+    
+    # Add security headers
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    
     return api_key_header
+
+def create_access_token(data: dict):
+    """Create a JWT access token."""
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 class Incident(BaseModel):
     """Incident data model."""
@@ -111,12 +176,26 @@ app = FastAPI(
     * Priority-based metrics
     
     All endpoints require API key authentication via the X-API-Key header.
+    Rate limiting is enforced to prevent abuse.
     """,
     version="1.0.0",
     docs_url=None,
     redoc_url=None,
     openapi_url=None
 )
+
+# Add rate limit handler
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """Add security headers to all responses."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    return response
 
 @app.get("/docs", include_in_schema=False)
 async def custom_swagger_ui_html():
@@ -161,34 +240,39 @@ async def get_openapi_endpoint():
     )
 
 @app.get("/sample-data", tags=["Data"])
-async def get_sample_data(api_key: APIKey = Depends(get_api_key)):
+@limiter.limit("10/minute")
+async def get_sample_data(
+    request: Request,
+    response: Response,
+    api_key: APIKey = Depends(get_api_key)
+):
     """
     Get sample incident data in JSON format.
     
     Returns a sample dataset that can be used to test the report generation endpoint.
+    Rate limited to 10 requests per minute.
     """
     try:
         sample_file = Path(__file__).parent.parent.parent / "data" / "sample_data.json"
         with open(sample_file, 'r') as f:
             return json.load(f)
     except Exception as e:
+        logger.error(f"Error loading sample data: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error loading sample data: {str(e)}")
 
 @app.post("/generate-report", tags=["Reports"])
-async def generate_report(data: IncidentData, api_key: APIKey = Depends(get_api_key)):
+@limiter.limit("5/minute")
+async def generate_report(
+    request: Request,
+    response: Response,
+    data: IncidentData,
+    api_key: APIKey = Depends(get_api_key)
+):
     """
     Generate a PDF report from incident data.
     
-    Takes a list of incidents and generates a detailed PDF report with:
-    * Overall incident statistics
-    * SLA compliance metrics
-    * Priority-based analysis
-    * Department breakdown
-    * Category analysis
-    * AI-powered summary
-    * Detailed incident list
-    
-    Returns the generated PDF file.
+    Takes a list of incidents and generates a detailed PDF report.
+    Rate limited to 5 requests per minute due to resource intensity.
     """
     try:
         from .report_generator import IncidentReportGenerator
@@ -210,10 +294,14 @@ async def generate_report(data: IncidentData, api_key: APIKey = Depends(get_api_
         )
         
     except Exception as e:
+        logger.error(f"Error generating report: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error generating report: {str(e)}")
 
 @app.get("/reports", tags=["Reports"])
+@limiter.limit("20/minute")
 async def list_reports(
+    request: Request,
+    response: Response,
     limit: int = Query(10, description="Maximum number of reports to return"),
     skip: int = Query(0, description="Number of reports to skip"),
     api_key: APIKey = Depends(get_api_key)
@@ -222,11 +310,7 @@ async def list_reports(
     List available incident reports.
     
     Returns a list of report information including filename, creation date, and file size.
-    Reports are sorted by creation date in descending order (newest first).
-    
-    Query Parameters:
-    * limit: Maximum number of reports to return (default: 10)
-    * skip: Number of reports to skip for pagination (default: 0)
+    Rate limited to 20 requests per minute.
     """
     try:
         reports_dir = Path("reports")
@@ -265,18 +349,24 @@ async def list_reports(
         }
         
     except Exception as e:
+        logger.error(f"Error listing reports: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Error listing reports: {str(e)}"
         )
 
 @app.get("/reports/latest", tags=["Reports"])
-async def get_latest_report(api_key: APIKey = Depends(get_api_key)):
+@limiter.limit("10/minute")
+async def get_latest_report(
+    request: Request,
+    response: Response,
+    api_key: APIKey = Depends(get_api_key)
+):
     """
     Get the most recently generated incident report.
     
-    Returns the PDF file of the latest report. If no reports exist,
-    returns a 404 error.
+    Returns the PDF file of the latest report.
+    Rate limited to 10 requests per minute.
     """
     try:
         reports_dir = Path("reports")
@@ -309,6 +399,7 @@ async def get_latest_report(api_key: APIKey = Depends(get_api_key)):
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error retrieving latest report: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Error retrieving latest report: {str(e)}"

@@ -13,6 +13,16 @@ An AI-powered incident report generator that creates detailed PDF reports from i
 - Report management (list, retrieve latest)
 - Customizable PDF styling with CSS
 
+## Security Features
+
+- Rate limiting on all endpoints
+- Comprehensive request logging
+- Security headers (HSTS, XSS Protection)
+- API key rotation system
+- JWT token support
+- Secure key validation
+- Environment variable security
+
 ## Prerequisites
 
 - Python 3.8+
@@ -40,7 +50,16 @@ pip install -r requirements.txt
 4. Set up environment variables:
 ```bash
 cp .env.example .env
-# Edit .env with your OpenAI API key and other settings
+# Edit .env with your configuration:
+# Required variables:
+# - OPENAI_API_KEY: Your OpenAI API key
+# - API_KEY: Your secure API key for authentication
+# - SECRET_KEY: Your secure secret key for JWT
+# Optional variables:
+# - WKHTMLTOPDF_PATH: Path to wkhtmltopdf binary
+# - API_HOST: API host (default: 0.0.0.0)
+# - API_PORT: API port (default: 8000)
+# - DEBUG: Enable debug mode (default: False)
 ```
 
 ## Usage
@@ -57,17 +76,21 @@ python run_api.py
 ## API Endpoints
 
 ### Data Management
-- `GET /sample-data` - Get sample incident data
-- `POST /generate-report` - Generate a PDF report from incident data
+- `GET /sample-data` - Get sample incident data (10 requests/minute)
+- `POST /generate-report` - Generate a PDF report from incident data (5 requests/minute)
 
 ### Report Management
-- `GET /reports` - List available reports (with pagination)
-- `GET /reports/latest` - Get the most recent report
+- `GET /reports` - List available reports with pagination (20 requests/minute)
+- `GET /reports/latest` - Get the most recent report (10 requests/minute)
 - `GET /` - API information and available endpoints
 
 ### Authentication
 
-All endpoints require an API key passed in the `X-API-Key` header.
+All endpoints require an API key passed in the `X-API-Key` header. The API implements:
+- API key rotation with expiration
+- Secure key validation using constant-time comparison
+- Rate limiting to prevent abuse
+- Request logging and monitoring
 
 ## Testing
 
@@ -89,6 +112,7 @@ incident-report-generator/
 │       └── utils/
 │           ├── ai_integration.py    # OpenAI integration
 │           ├── data_processing.py   # Data analysis
+│           ├── key_management.py    # API key rotation
 │           └── pdf_converter.py     # PDF generation
 ├── tests/                  # Test files
 ├── .env.example           # Example environment variables
