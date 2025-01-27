@@ -82,6 +82,42 @@ docker compose logs -f api
 docker compose down
 ```
 
+## Production Deployment
+
+1. Set up SSL certificates:
+```bash
+mkdir -p nginx/ssl
+# Generate self-signed certificates (for testing only)
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout nginx/ssl/key.pem -out nginx/ssl/cert.pem -subj "/CN=localhost"
+```
+
+2. Create production environment file:
+```bash
+cp .env.prod.example .env.prod
+```
+
+3. Update production environment variables in `.env.prod`:
+```
+PORT=8081
+OPENAI_API_KEY=your_openai_api_key
+API_KEY=your_api_key
+DEBUG=0
+ENVIRONMENT=production
+LOG_LEVEL=INFO
+```
+
+4. Start the production stack:
+```bash
+docker compose -f docker-compose.prod.yml up -d
+```
+
+The production setup includes:
+- Multiple API instances for high availability
+- Nginx as a reverse proxy and load balancer
+- HTTPS support
+- Health monitoring
+- Resource limits and logging
+
 ## Usage
 
 ### Local Development
