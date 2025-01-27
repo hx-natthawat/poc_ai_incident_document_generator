@@ -1,200 +1,109 @@
 # Incident Report Generator
 
-An AI-powered incident report generator that creates detailed PDF reports from incident data. Built with FastAPI and OpenAI.
+An API service for generating detailed incident reports with AI-powered summaries.
 
 ## Features
 
-- Generate comprehensive PDF reports from incident data
-- AI-powered incident analysis and summaries
-- Department and category breakdowns
-- SLA compliance tracking
-- Priority-based metrics
-- Modern REST API with API key authentication
-- Report management (list, retrieve latest)
-- Customizable PDF styling with CSS
+- Generate PDF reports from incident data with AI-enhanced summaries
+- Secure API access with API key authentication
+- Rate limiting to prevent abuse
+- Load balancing with multiple API instances
+- HTTPS support with SSL/TLS
+- Persistent report storage using Docker volumes
+- Beautiful report template with company logo
 
-## Security Features
+## API Endpoints
 
-- Rate limiting on all endpoints
-- Comprehensive request logging
-- Security headers (HSTS, XSS Protection)
-- API key rotation system
-- JWT token support
-- Secure key validation
-- Environment variable security
+### Reports
+- `POST /generate-report` - Generate a new incident report (Rate limit: 5/min)
+- `GET /reports/list` - List available reports with pagination (Rate limit: 20/min)
+- `GET /reports/download/{filename}` - Download a specific report (Rate limit: 30/min)
+- `GET /reports/latest` - Get the most recent report (Rate limit: 10/min)
 
-## Prerequisites
+### Utilities
+- `GET /sample-data` - Get sample incident data (Rate limit: 10/min)
+- `GET /health` - Check API health status (Rate limit: 60/min)
 
-- Python 3.8+ or Docker
-- wkhtmltopdf (for PDF generation, not needed with Docker)
-- OpenAI API key
+## Development Setup
 
-## Installation
-
-### Local Development
-
-1. Clone the repository:
+1. Clone the repository
+2. Create a `.env` file based on `.env.example`
+3. Run development server:
 ```bash
-git clone https://github.com/yourusername/incident-report-generator.git
-cd incident-report-generator
-```
-
-2. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-3. Install wkhtmltopdf:
-- macOS: `brew install wkhtmltopdf`
-- Linux: `apt-get install wkhtmltopdf`
-- Windows: Download from [wkhtmltopdf.org](https://wkhtmltopdf.org/downloads.html)
-
-4. Set up environment variables:
-```bash
-cp .env.example .env
-# Edit .env with your configuration:
-# Required variables:
-# - OPENAI_API_KEY: Your OpenAI API key
-# - API_KEY: Your secure API key for authentication
-# - SECRET_KEY: Your secure secret key for JWT
-# Optional variables:
-# - WKHTMLTOPDF_PATH: Path to wkhtmltopdf binary
-# - API_HOST: API host (default: 0.0.0.0)
-# - API_PORT: API port (default: 8000)
-# - DEBUG: Enable debug mode (default: False)
-```
-
-### Docker Deployment
-
-1. Build and run with Docker Compose:
-```bash
-# Copy environment file
-cp .env.example .env
-# Edit .env with your configuration
-
-# Start the service
 docker compose up -d
+```
 
-# View logs
-docker compose logs -f api
-
-# Stop the service
-docker compose down
+4. Test the development API:
+```bash
+python test_api_dev.py
 ```
 
 ## Production Deployment
 
-1. Set up SSL certificates:
-```bash
-mkdir -p nginx/ssl
-# Generate self-signed certificates (for testing only)
-openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout nginx/ssl/key.pem -out nginx/ssl/cert.pem -subj "/CN=localhost"
-```
-
-2. Create production environment file:
-```bash
-cp .env.prod.example .env.prod
-```
-
-3. Update production environment variables in `.env.prod`:
-```
-PORT=8081
-OPENAI_API_KEY=your_openai_api_key
-API_KEY=your_api_key
-DEBUG=0
-ENVIRONMENT=production
-LOG_LEVEL=INFO
-```
-
-4. Start the production stack:
+1. Create `.env.prod` based on `.env.prod.example`
+2. Set up SSL certificates in `nginx/ssl/`
+3. Run production server:
 ```bash
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-The production setup includes:
-- Multiple API instances for high availability
-- Nginx as a reverse proxy and load balancer
-- HTTPS support
-- Health monitoring
-- Resource limits and logging
-
-## Usage
-
-### Local Development
+4. Test the production API:
 ```bash
-python run_api.py
+python test_api_prod.py
 ```
 
-### Docker
-```bash
-docker compose up -d
-```
+## Environment Variables
 
-Access the API documentation:
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+### Development
+- `API_PORT` - API server port (default: 8080)
+- `API_KEY` - API authentication key
+- `OPENAI_API_KEY` - OpenAI API key for AI summaries
 
-## API Endpoints
+### Production
+Additional variables in `.env.prod`:
+- `SSL_CERTIFICATE` - Path to SSL certificate
+- `SSL_KEY` - Path to SSL private key
+- `ALLOWED_HOSTS` - Comma-separated list of allowed hosts
 
-### Data Management
-- `GET /sample-data` - Get sample incident data (10 requests/minute)
-- `POST /generate-report` - Generate a PDF report from incident data (5 requests/minute)
+## Docker Volumes
 
-### Report Management
-- `GET /reports` - List available reports with pagination (20 requests/minute)
-- `GET /reports/latest` - Get the most recent report (10 requests/minute)
-- `GET /` - API information and available endpoints
-
-### Authentication
-
-All endpoints require an API key passed in the `X-API-Key` header. The API implements:
-- API key rotation with expiration
-- Secure key validation using constant-time comparison
-- Rate limiting to prevent abuse
-- Request logging and monitoring
+- `reports_data` - Persistent storage for generated reports
+- `nginx/ssl` - SSL certificates for HTTPS
+- `nginx/conf.d` - Nginx configuration
+- `data` - Application data directory
+- `templates` - Report templates and assets
 
 ## Testing
 
-Run the test suite:
-```bash
-# Local testing
-python test_api.py
+The project includes two test scripts:
+- `test_api_dev.py` - Test development environment (HTTP, port 8080)
+- `test_api_prod.py` - Test production environment (HTTPS, port 443)
 
-# Docker testing
-docker compose exec api python test_api.py
-```
+## Report Templates
 
-## Project Structure
+Reports are generated using a customizable markdown template located at `templates/report_template.md`. The template includes:
+- Company logo
+- Executive summary with AI-generated insights
+- Detailed incident analysis
+- Key metrics and statistics
+- Department and category breakdowns
 
-```
-incident-report-generator/
-├── data/                    # Sample data and resources
-├── reports/                 # Generated reports
-├── src/
-│   └── incident_report_generator/
-│       ├── api.py          # FastAPI application
-│       ├── report_generator.py  # Report generation logic
-│       └── utils/
-│           ├── ai_integration.py    # OpenAI integration
-│           ├── data_processing.py   # Data analysis
-│           ├── key_management.py    # API key rotation
-│           └── pdf_converter.py     # PDF generation
-├── tests/                  # Test files
-├── .env.example           # Example environment variables
-├── docker-compose.yml     # Docker Compose configuration
-├── Dockerfile            # Docker build configuration
-├── requirements.txt       # Python dependencies
-└── README.md             # This file
-```
+## Security
+
+- API key authentication required for all endpoints
+- Rate limiting to prevent abuse
+- HTTPS encryption in production
+- Secure file handling
+- Environment variable configuration
+- No sensitive data in logs
 
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+3. Make your changes
+4. Submit a pull request
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT License
