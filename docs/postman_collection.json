@@ -1,0 +1,156 @@
+{
+  "info": {
+    "name": "Incident Report Generator API",
+    "description": "Collection for testing the Incident Report Generator API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Generate Report",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-API-Key",
+            "value": "{{api_key}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"incidents\": [\n    {\n      \"ID\": \"INC001\",\n      \"Title\": \"System Outage\",\n      \"Description\": \"Complete system outage affecting all users\",\n      \"Status\": \"Resolved\",\n      \"Priority\": \"High\",\n      \"Department\": \"IT\",\n      \"Category\": \"Infrastructure\",\n      \"Created_Date\": \"2025-01-27T10:00:00\",\n      \"Resolution_Date\": \"2025-01-27T12:00:00\",\n      \"SLA_Status\": \"Within SLA\"\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/generate-report",
+          "host": ["{{base_url}}"],
+          "path": ["generate-report"]
+        },
+        "description": "Generate a PDF report from incident data"
+      }
+    },
+    {
+      "name": "List Reports",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-API-Key",
+            "value": "{{api_key}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/reports/list?limit=5&skip=0",
+          "host": ["{{base_url}}"],
+          "path": ["reports", "list"],
+          "query": [
+            {
+              "key": "limit",
+              "value": "5"
+            },
+            {
+              "key": "skip",
+              "value": "0"
+            }
+          ]
+        },
+        "description": "List available reports with pagination"
+      }
+    },
+    {
+      "name": "Download Report",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-API-Key",
+            "value": "{{api_key}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/reports/download/incident_report_20250127_180617.pdf",
+          "host": ["{{base_url}}"],
+          "path": ["reports", "download", "incident_report_20250127_180617.pdf"]
+        },
+        "description": "Download a specific report by filename"
+      }
+    },
+    {
+      "name": "Get Latest Report",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-API-Key",
+            "value": "{{api_key}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/reports/latest",
+          "host": ["{{base_url}}"],
+          "path": ["reports", "latest"]
+        },
+        "description": "Get the most recent report"
+      }
+    },
+    {
+      "name": "Get Sample Data",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-API-Key",
+            "value": "{{api_key}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/sample-data",
+          "host": ["{{base_url}}"],
+          "path": ["sample-data"]
+        },
+        "description": "Get sample incident data for testing"
+      }
+    },
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-API-Key",
+            "value": "{{api_key}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["health"]
+        },
+        "description": "Check API health status"
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080",
+      "type": "string",
+      "description": "Base URL for development environment"
+    },
+    {
+      "key": "api_key",
+      "value": "your-api-key-here",
+      "type": "string",
+      "description": "API key for authentication"
+    }
+  ]
+}

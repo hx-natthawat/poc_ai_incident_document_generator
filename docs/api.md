@@ -2,14 +2,16 @@
 
 ## Overview
 
-The Incident Report Generator API provides endpoints for generating detailed incident reports with AI-powered summaries. The API uses API key authentication for security and provides comprehensive documentation through Swagger UI and ReDoc interfaces.
+The Incident Report Generator API provides endpoints for generating detailed incident reports with AI-powered summaries. The API uses API key authentication for security and implements rate limiting to prevent abuse.
 
 ## Base URLs
 
 - Local Development: `http://localhost:8080`
 - Docker: `http://localhost:8080`
+- Production: `https://your-domain`
 
 For production deployments, configure the host and port through environment variables:
+
 - `API_HOST`: Host address (default: 0.0.0.0)
 - `API_PORT`: Port number (default: 8080)
 
@@ -22,6 +24,7 @@ curl -H "X-API-Key: your-api-key" http://localhost:8080/endpoint
 ```
 
 To configure your API key:
+
 1. Copy `.env.example` to `.env`
 2. Set your secure API key:
    ```
@@ -36,9 +39,25 @@ To configure your API key:
 4. Rotate API keys regularly
 5. Monitor API usage for suspicious activity
 
+## Rate Limiting
+
+The API implements rate limiting to ensure fair usage and system stability:
+
+| Endpoint                       | Rate Limit         |
+| ------------------------------ | ------------------ |
+| `/generate-report`             | 5 requests/minute  |
+| `/reports/list`                | 20 requests/minute |
+| `/reports/download/{filename}` | 30 requests/minute |
+| `/reports/latest`              | 10 requests/minute |
+| `/sample-data`                 | 10 requests/minute |
+| `/health`                      | 60 requests/minute |
+
+When rate limit is exceeded, the API returns a 429 (Too Many Requests) status code.
+
 ## API Documentation Interfaces
 
 1. **Swagger UI**
+
    - URL: `/docs`
    - Features:
      - Interactive API testing
@@ -47,6 +66,7 @@ To configure your API key:
      - Schema information
 
 2. **ReDoc**
+
    - URL: `/redoc`
    - Features:
      - Clean, responsive interface
@@ -69,20 +89,54 @@ GET /
 Returns information about the API and available endpoints.
 
 **Authentication:**
+
 - Required: Yes
 - Header: `X-API-Key`
 
 **Response Example:**
+
 ```json
 {
   "name": "Incident Report Generator API",
   "version": "1.0.0",
   "endpoints": [
-    {"path": "/", "method": "GET", "description": "This information"},
-    {"path": "/sample-data", "method": "GET", "description": "Get sample incident data"},
-    {"path": "/generate-report", "method": "POST", "description": "Generate PDF report from incident data"},
-    {"path": "/docs", "method": "GET", "description": "API documentation (Swagger UI)"},
-    {"path": "/redoc", "method": "GET", "description": "API documentation (ReDoc)"}
+    { "path": "/", "method": "GET", "description": "This information" },
+    {
+      "path": "/sample-data",
+      "method": "GET",
+      "description": "Get sample incident data"
+    },
+    {
+      "path": "/generate-report",
+      "method": "POST",
+      "description": "Generate PDF report from incident data"
+    },
+    {
+      "path": "/docs",
+      "method": "GET",
+      "description": "API documentation (Swagger UI)"
+    },
+    {
+      "path": "/redoc",
+      "method": "GET",
+      "description": "API documentation (ReDoc)"
+    },
+    {
+      "path": "/reports/list",
+      "method": "GET",
+      "description": "List available reports"
+    },
+    {
+      "path": "/reports/download/{filename}",
+      "method": "GET",
+      "description": "Download a specific report"
+    },
+    {
+      "path": "/reports/latest",
+      "method": "GET",
+      "description": "Get the latest report"
+    },
+    { "path": "/health", "method": "GET", "description": "API health check" }
   ]
 }
 ```
@@ -95,26 +149,32 @@ GET /sample-data
 
 Returns sample incident data that can be used to test the report generation endpoint.
 
+**Rate Limit:** 10 requests/minute
+
 **Authentication:**
+
 - Required: Yes
 - Header: `X-API-Key`
 
 **Response:**
+
 - Content-Type: `application/json`
 
 **Response Example:**
+
 ```json
 {
   "incidents": [
     {
-      "Incident_ID": "INC001",
+      "ID": "INC001",
       "Title": "System Outage",
+      "Description": "Complete system outage affecting all users",
+      "Status": "Resolved",
       "Priority": "High",
       "Department": "IT",
       "Category": "Infrastructure",
-      "Status": "Resolved",
-      "Created_On": "2025-01-27T10:00:00",
-      "Resolved_On": "2025-01-27T12:00:00",
+      "Created_Date": "2025-01-27T10:00:00",
+      "Resolution_Date": "2025-01-27T12:00:00",
       "SLA_Status": "Within SLA"
     }
   ]
@@ -129,27 +189,33 @@ POST /generate-report
 
 Generates a PDF report from the provided incident data.
 
+**Rate Limit:** 5 requests/minute
+
 **Authentication:**
+
 - Required: Yes
 - Header: `X-API-Key`
 
 **Request Headers:**
+
 - Content-Type: `application/json`
 - X-API-Key: `your-api-key`
 
 **Request Body:**
+
 ```json
 {
   "incidents": [
     {
-      "Incident_ID": "INC001",
+      "ID": "INC001",
       "Title": "System Outage",
+      "Description": "Complete system outage affecting all users",
+      "Status": "Resolved",
       "Priority": "High",
       "Department": "IT",
       "Category": "Infrastructure",
-      "Status": "Resolved",
-      "Created_On": "2025-01-27T10:00:00",
-      "Resolved_On": "2025-01-27T12:00:00",
+      "Created_Date": "2025-01-27T10:00:00",
+      "Resolution_Date": "2025-01-27T12:00:00",
       "SLA_Status": "Within SLA"
     }
   ]
@@ -157,10 +223,12 @@ Generates a PDF report from the provided incident data.
 ```
 
 **Response:**
+
 - Content-Type: `application/pdf`
 - Content-Disposition: `attachment; filename=incident_report_YYYYMMDD_HHMMSS.pdf`
 
 The response will be a PDF file containing the generated report with:
+
 - Overall incident statistics
 - SLA compliance metrics
 - Priority-based analysis
@@ -170,16 +238,125 @@ The response will be a PDF file containing the generated report with:
 - AI-powered summary
 - Detailed incident list
 
+### 4. List Reports
+
+```http
+GET /reports/list
+```
+
+Lists available reports with pagination support.
+
+**Rate Limit:** 20 requests/minute
+
+**Authentication:**
+
+- Required: Yes
+- Header: `X-API-Key`
+
+**Query Parameters:**
+
+- `limit` (optional): Maximum number of reports to return (default: 10)
+- `skip` (optional): Number of reports to skip (default: 0)
+
+**Response Example:**
+
+```json
+{
+  "total": 25,
+  "reports": [
+    {
+      "filename": "incident_report_20250127_180617.pdf",
+      "created_at": "2025-01-27T18:06:17.628516",
+      "file_size": 24234,
+      "path": "/app/reports/incident_report_20250127_180617.pdf"
+    }
+  ],
+  "limit": 10,
+  "skip": 0
+}
+```
+
+### 5. Download Report
+
+```http
+GET /reports/download/{filename}
+```
+
+Downloads a specific report by filename.
+
+**Rate Limit:** 30 requests/minute
+
+**Authentication:**
+
+- Required: Yes
+- Header: `X-API-Key`
+
+**Parameters:**
+
+- `filename`: Name of the report file to download
+
+**Response:**
+
+- Content-Type: `application/pdf`
+- Content-Disposition: `attachment; filename={filename}`
+
+### 6. Get Latest Report
+
+```http
+GET /reports/latest
+```
+
+Downloads the most recently generated report.
+
+**Rate Limit:** 10 requests/minute
+
+**Authentication:**
+
+- Required: Yes
+- Header: `X-API-Key`
+
+**Response:**
+
+- Content-Type: `application/pdf`
+- Content-Disposition: `attachment; filename={latest_report_name}`
+
+### 7. Health Check
+
+```http
+GET /health
+```
+
+Returns the API's health status.
+
+**Rate Limit:** 60 requests/minute
+
+**Authentication:**
+
+- Required: Yes
+- Header: `X-API-Key`
+
+**Response Example:**
+
+```json
+{
+  "status": "healthy",
+  "version": "1.0.0",
+  "timestamp": "2025-01-27T18:06:17.628516"
+}
+```
+
 ## Error Handling
 
 The API uses standard HTTP status codes:
 
-| Status Code | Description |
-|------------|-------------|
-| 200 | Success |
-| 403 | Invalid or missing API key |
-| 422 | Invalid request data |
-| 500 | Server error |
+| Status Code | Description                             |
+| ----------- | --------------------------------------- |
+| 200         | Success                                 |
+| 400         | Bad Request                             |
+| 401         | Unauthorized (Invalid API key)          |
+| 404         | Not Found                               |
+| 429         | Too Many Requests (Rate limit exceeded) |
+| 500         | Internal Server Error                   |
 
 Error responses include a JSON body with details:
 
@@ -189,17 +366,10 @@ Error responses include a JSON body with details:
 }
 ```
 
-## Rate Limiting
-
-The API currently does not implement rate limiting, but users should:
-1. Implement appropriate retry mechanisms
-2. Handle errors gracefully
-3. Monitor API usage
-4. Contact support if high-volume usage is needed
-
 ## Development and Testing
 
 1. Test the API using the provided sample data:
+
    ```bash
    curl -H "X-API-Key: your-api-key" http://localhost:8080/sample-data > test_data.json
    curl -X POST http://localhost:8080/generate-report \
@@ -217,6 +387,7 @@ The API currently does not implement rate limiting, but users should:
 ## Support
 
 For issues, questions, or feature requests:
+
 1. Check the API documentation
 2. Review error messages and logs
 3. Submit an issue in the repository
