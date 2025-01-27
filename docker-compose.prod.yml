@@ -8,6 +8,7 @@ services:
     volumes:
       - reports_data:/app/reports
       - ./data:/app/data:ro
+      - ./templates:/app/templates:ro
     env_file:
       - .env.prod
     healthcheck:
@@ -38,6 +39,7 @@ services:
     volumes:
       - reports_data:/app/reports
       - ./data:/app/data:ro
+      - ./templates:/app/templates:ro
     env_file:
       - .env.prod
     healthcheck:

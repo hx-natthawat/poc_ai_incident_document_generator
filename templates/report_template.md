@@ -1,3 +1,5 @@
+![Company Logo](/app/templates/assets/logo.svg)
+
 # Incident Management Summary Report
 
 **Report Period:** {start_date} to {end_date}

@@ -298,7 +298,7 @@ async def generate_report(
         logger.error(f"Error generating report: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error generating report: {str(e)}")
 
-@app.get("/reports", tags=["Reports"])
+@app.get("/reports/list", tags=["Reports"])
 @limiter.limit("20/minute")
 async def list_reports(
     request: Request,
@@ -314,47 +314,34 @@ async def list_reports(
     Rate limited to 20 requests per minute.
     """
     try:
-        reports_dir = Path("reports")
-        if not reports_dir.exists():
-            return {"reports": [], "total": 0}
-        
-        # Get all PDF files in reports directory
-        pdf_files = sorted(
-            reports_dir.glob("*.pdf"),
-            key=lambda x: x.stat().st_mtime,
-            reverse=True
-        )
-        
-        # Apply pagination
-        total_reports = len(pdf_files)
-        pdf_files = pdf_files[skip:skip + limit]
-        
-        # Convert to report info
+        reports_dir = Path("/app/reports")
         reports = []
-        for pdf_file in pdf_files:
-            stat = pdf_file.stat()
+        
+        for report in sorted(reports_dir.glob("*.pdf"), key=lambda x: x.stat().st_mtime, reverse=True):
+            stat = report.stat()
             reports.append(
                 ReportInfo(
-                    filename=pdf_file.name,
+                    filename=report.name,
                     created_at=datetime.fromtimestamp(stat.st_mtime),
                     file_size=stat.st_size,
-                    path=str(pdf_file)
-                ).dict()
+                    path=str(report)
+                )
             )
         
+        # Apply pagination
+        total = len(reports)
+        reports = reports[skip:skip + limit]
+        
         return {
+            "total": total,
             "reports": reports,
-            "total": total_reports,
             "limit": limit,
             "skip": skip
         }
         
     except Exception as e:
         logger.error(f"Error listing reports: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error listing reports: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error listing reports: {str(e)}")
 
 @app.get("/reports/latest", tags=["Reports"])
 @limiter.limit("10/minute")
@@ -405,6 +392,42 @@ async def get_latest_report(
             status_code=500,
             detail=f"Error retrieving latest report: {str(e)}"
         )
+
+@app.get("/reports/download/{filename}", tags=["Reports"])
+@limiter.limit("30/minute")
+async def download_report(
+    request: Request,
+    response: Response,
+    filename: str,
+    api_key: APIKey = Depends(get_api_key)
+):
+    """
+    Download a specific report by filename.
+    
+    Returns the PDF file for download.
+    Rate limited to 30 requests per minute.
+    """
+    try:
+        reports_dir = Path("/app/reports")
+        file_path = reports_dir / filename
+        
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="Report not found")
+            
+        if not filename.endswith('.pdf'):
+            raise HTTPException(status_code=400, detail="Invalid file type")
+            
+        return FileResponse(
+            path=file_path,
+            filename=filename,
+            media_type='application/pdf'
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error downloading report: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error downloading report: {str(e)}")
 
 @app.get("/health", tags=["System"])
 @limiter.limit("60/minute")
